@@ -132,7 +132,7 @@ if st.sidebar.button("🚪 Logout"):
     st.session_state.authenticated = False
     st.session_state.username = None
     st.session_state.role = None
-    st.experimental_rerun()
+    st.rerun()
 
 # --- Role-Based Access Control ---
 def check_access(required_role):
