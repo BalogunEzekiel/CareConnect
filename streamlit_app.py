@@ -6,7 +6,7 @@ import pandas as pd
 st.title("🏥 Hospital Appointment & Patient Analysis")
 
 # Connect to DB
-conn = sqlite3.connect("data/hospital.db")
+conn = sqlite3.connect("data/careconnect.db")
 cursor = conn.cursor()
 
 st.sidebar.header("Navigation")
