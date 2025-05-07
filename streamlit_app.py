@@ -103,7 +103,7 @@ if not st.session_state.authenticated:
             st.session_state.username = username
             st.session_state.role = user[2]  # Role is stored in user[2]
             st.success("Login successful!")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Invalid credentials. Please try again.")
 
