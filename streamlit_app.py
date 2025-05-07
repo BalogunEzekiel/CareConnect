@@ -2,68 +2,69 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
+st.set_page_config(page_title="Hospital Dashboard", layout="wide")
 st.title("🏥 Hospital Appointment & Patient Analysis")
 
-# Connect to DB
-conn = sqlite3.connect("data/hospital.db")
-cursor = conn.cursor()
-
-st.sidebar.header("Navigation")
-section = st.sidebar.radio("Go to", ["Patients", "Doctors", "Appointments", "Reports"])
-
-# Check tables in the database
-try:
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = cursor.fetchall()
-    print(tables)  # You can also display this in Streamlit if needed
-except Exception as e:
-    st.error(f"Error checking tables: {e}")
-    print(f"Error checking tables: {e}")
-
-if section == "Patients":
-    st.subheader("Registered Patients")
+# Function to connect to database safely
+def connect_db(db_path="data/hospital.db"):
     try:
-        df = pd.read_sql_query("SELECT * FROM patients", conn)
-        st.dataframe(df)
+        conn = sqlite3.connect(db_path)
+        return conn
+    except sqlite3.Error as e:
+        st.error(f"Database connection failed: {e}")
+        return None
+
+# Load data safely
+def load_data(query, conn):
+    try:
+        return pd.read_sql_query(query, conn)
     except Exception as e:
-        st.error(f"Error loading patient data: {e}")
-        print(f"Error loading patient data: {e}")
+        st.error(f"Failed to execute query: {e}")
+        return pd.DataFrame()
 
-elif section == "Doctors":
-    st.subheader("Doctors on Staff")
-    try:
-        df = pd.read_sql_query("SELECT * FROM doctors", conn)
+# Main app logic
+conn = connect_db()
+
+if conn:
+    st.sidebar.header("Navigation")
+    section = st.sidebar.radio("Go to", ["Patients", "Doctors", "Appointments", "Reports"])
+
+    if section == "Patients":
+        st.subheader("Registered Patients")
+        df = load_data("SELECT * FROM patients", conn)
         st.dataframe(df)
-    except Exception as e:
-        st.error(f"Error loading doctor data: {e}")
-        print(f"Error loading doctor data: {e}")
 
-elif section == "Appointments":
-    st.subheader("Appointments Record")
-    try:
-        df = pd.read_sql_query("""
-            SELECT a.appointment_id, p.name AS patient, d.name AS doctor, a.appointment_date, a.status, a.diagnosis
+    elif section == "Doctors":
+        st.subheader("Doctors on Staff")
+        df = load_data("SELECT * FROM doctors", conn)
+        st.dataframe(df)
+
+    elif section == "Appointments":
+        st.subheader("Appointments Record")
+        query = """
+            SELECT a.appointment_id, p.name AS patient, d.name AS doctor,
+                   a.appointment_date, a.status, a.diagnosis
             FROM appointments a
             JOIN patients p ON a.patient_id = p.patient_id
             JOIN doctors d ON a.doctor_id = d.doctor_id
-        """, conn)
+        """
+        df = load_data(query, conn)
         st.dataframe(df)
-    except Exception as e:
-        st.error(f"Error loading appointment data: {e}")
-        print(f"Error loading appointment data: {e}")
 
-elif section == "Reports":
-    st.subheader("Quick Reports")
-    try:
-        count_patients = pd.read_sql_query("SELECT COUNT(*) AS total_patients FROM patients", conn)
-        count_doctors = pd.read_sql_query("SELECT COUNT(*) AS total_doctors FROM doctors", conn)
-        count_appointments = pd.read_sql_query("SELECT COUNT(*) AS total_appointments FROM appointments", conn)
-        st.metric("Total Patients", count_patients.iloc[0, 0])
-        st.metric("Total Doctors", count_doctors.iloc[0, 0])
-        st.metric("Total Appointments", count_appointments.iloc[0, 0])
-    except Exception as e:
-        st.error(f"Error loading reports: {e}")
-        print(f"Error loading reports: {e}")
+    elif section == "Reports":
+        st.subheader("Quick Reports")
+        count_patients = load_data("SELECT COUNT(*) AS total_patients FROM patients", conn)
+        count_doctors = load_data("SELECT COUNT(*) AS total_doctors FROM doctors", conn)
+        count_appointments = load_data("SELECT COUNT(*) AS total_appointments FROM appointments", conn)
 
-# Close the connection after all database operations
-conn.close()
+        if not count_patients.empty and not count_doctors.empty and not count_appointments.empty:
+            st.metric("Total Patients", count_patients.iloc[0, 0])
+            st.metric("Total Doctors", count_doctors.iloc[0, 0])
+            st.metric("Total Appointments", count_appointments.iloc[0, 0])
+        else:
+            st.warning("Unable to load one or more metrics.")
+
+    # Close the connection at the end
+    conn.close()
+else:
+    st.stop()
