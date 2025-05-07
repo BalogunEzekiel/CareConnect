@@ -121,8 +121,7 @@ if not st.session_state.authenticated:
                     st.session_state.authenticated = True
                     st.session_state.username = reg_username
                     st.session_state.role = reg_role
-                    time.sleep(2)  # Add a short delay
-                    st.experimental_rerun()
+                    st.rerun()
                 except sqlite3.IntegrityError:
                     st.error("Username already exists. Please choose a different one.")
     st.stop()
