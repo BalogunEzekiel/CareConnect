@@ -5,7 +5,6 @@ import hashlib
 import uuid
 import time
 
-
 # --- Helper Functions ---
 def hash_password(password):
     """Hash a password using SHA256."""
