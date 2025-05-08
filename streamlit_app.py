@@ -1,20 +1,23 @@
+import bcrypt
 import streamlit as st
 import sqlite3
 import pandas as pd
-import bcrypt
 from datetime import date
 
 # --- Helper Functions ---
+# Hashing the password with bcrypt
 def hash_password(password):
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode(), salt).decode('utf-8')
+    salt = bcrypt.gensalt()  # Generates a salt
+    return bcrypt.hashpw(password.encode(), salt).decode('utf-8')  # Hash the password
 
+# Check if the input password matches the stored hashed password
 def check_password(input_password, stored_hashed_password):
-    # Ensure stored_hashed_password is bytes
+    # Ensure stored_hashed_password is bytes if it's a string
     if isinstance(stored_hashed_password, str):
         stored_hashed_password = stored_hashed_password.encode('utf-8')
     return bcrypt.checkpw(input_password.encode(), stored_hashed_password)
 
+# Reset the password in the database
 def reset_password(username, new_password, conn):
     hashed = hash_password(new_password)
     conn.execute("UPDATE users SET password = ? WHERE username = ?", (hashed, username))
@@ -33,30 +36,30 @@ conn = get_connection()
 # --- Initialize Database ---
 def init_db():
     conn.execute('''CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
-        password TEXT,
+        username TEXT PRIMARY KEY, 
+        password TEXT, 
         role TEXT
     )''')
     conn.execute('''CREATE TABLE IF NOT EXISTS patients (
-        patient_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        age INTEGER,
-        gender TEXT,
+        patient_id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        name TEXT, 
+        age INTEGER, 
+        gender TEXT, 
         contact TEXT
     )''')
     conn.execute('''CREATE TABLE IF NOT EXISTS doctors (
-        doctor_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
+        doctor_id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        name TEXT, 
         specialty TEXT
     )''')
     conn.execute('''CREATE TABLE IF NOT EXISTS appointments (
-        appointment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER,
-        doctor_id INTEGER,
-        appointment_date DATE,
-        status TEXT,
-        diagnosis TEXT,
-        FOREIGN KEY(patient_id) REFERENCES patients(patient_id),
+        appointment_id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        patient_id INTEGER, 
+        doctor_id INTEGER, 
+        appointment_date DATE, 
+        status TEXT, 
+        diagnosis TEXT, 
+        FOREIGN KEY(patient_id) REFERENCES patients(patient_id), 
         FOREIGN KEY(doctor_id) REFERENCES doctors(doctor_id)
     )''')
     conn.commit()
@@ -134,11 +137,11 @@ else:
         st.rerun()
 
     st.title("🏥 CareConnect Hospital Dashboard")
-    tab1, tab2, tab3 = st.tabs(["🧑‍⚕️ Patients", "👨‍⚕️ Doctors", "📅 Appointments"])
+    tab1, tab2, tab3 = st.tabs(["Patients", "Doctors", "Appointments"])
 
     # --- Patients Tab ---
     with tab1:
-        st.header("🧑‍⚕️ Patient Records")
+        st.header("👩‍⚕️ Patient Records")
         if st.button("Show All Patients"):
             df = pd.read_sql_query("SELECT * FROM patients", conn)
             st.dataframe(df)
@@ -153,7 +156,7 @@ else:
                 gender = st.selectbox("Gender", ["Male", "Female", "Other"])
                 contact = st.text_input("Contact")
                 submitted = st.form_submit_button("Add Patient")
-                if submitted and name and contact:
+                if submitted:
                     conn.execute("INSERT INTO patients (name, age, gender, contact) VALUES (?, ?, ?, ?)",
                                  (name, age, gender, contact))
                     conn.commit()
@@ -161,27 +164,28 @@ else:
 
     # --- Doctors Tab ---
     with tab2:
-        st.header("👨‍⚕️ Doctor Records")
+        st.header("👩‍⚕️ Doctor Records")
         if st.button("Show All Doctors"):
             df = pd.read_sql_query("SELECT * FROM doctors", conn)
             st.dataframe(df)
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("Download CSV", csv, "doctors.csv", "text/csv")
 
-        if st.session_state.role == "admin":
+        if st.session_state.role in ["admin"]:
             with st.form("add_doctor_form"):
                 st.subheader("Add New Doctor")
                 name = st.text_input("Doctor Name")
                 specialty = st.text_input("Specialty")
                 submitted = st.form_submit_button("Add Doctor")
-                if submitted and name and specialty:
-                    conn.execute("INSERT INTO doctors (name, specialty) VALUES (?, ?)", (name, specialty))
+                if submitted:
+                    conn.execute("INSERT INTO doctors (name, specialty) VALUES (?, ?)",
+                                 (name, specialty))
                     conn.commit()
                     st.success("Doctor added successfully!")
 
     # --- Appointments Tab ---
     with tab3:
-        st.header("📅 Appointments")
+        st.header("🗓️ Appointments")
         if st.button("Show All Appointments"):
             query = '''
             SELECT a.appointment_id, p.name AS patient, d.name AS doctor, 
@@ -207,9 +211,8 @@ else:
                 diagnosis = st.text_input("Diagnosis")
                 submitted = st.form_submit_button("Book Appointment")
                 if submitted:
-                    conn.execute(""" 
-                        INSERT INTO appointments (patient_id, doctor_id, appointment_date, status, diagnosis)
-                        VALUES (?, ?, ?, ?, ?)""",
-                        (patient_choice[0], doctor_choice[0], appointment_date, status, diagnosis))
+                    conn.execute("""INSERT INTO appointments (patient_id, doctor_id, appointment_date, status, diagnosis)
+                                    VALUES (?, ?, ?, ?, ?)""",
+                                    (patient_choice[0], doctor_choice[0], appointment_date, status, diagnosis))
                     conn.commit()
                     st.success("Appointment booked successfully!")
