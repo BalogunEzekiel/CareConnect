@@ -2,14 +2,15 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import bcrypt
+from datetime import date
 
 # --- Helper Functions ---
 def hash_password(password):
     salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode(), salt)
+    return bcrypt.hashpw(password.encode(), salt).decode('utf-8')
 
 def check_password(input_password, stored_hashed_password):
-    return bcrypt.checkpw(input_password.encode(), stored_hashed_password)
+    return bcrypt.checkpw(input_password.encode(), stored_hashed_password.encode('utf-8'))
 
 def reset_password(username, new_password, conn):
     hashed = hash_password(new_password)
@@ -30,7 +31,7 @@ conn = get_connection()
 def init_db():
     conn.execute('''CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
-        password BLOB,
+        password TEXT,
         role TEXT
     )''')
     conn.execute('''CREATE TABLE IF NOT EXISTS patients (
@@ -91,8 +92,8 @@ def register(username, password, role):
 
 # --- Authentication UI ---
 if not st.session_state.authenticated:
-    tab1, tab2, tab3 = st.tabs(["Login", "Register", "Reset Password"])
-    
+    tab1, tab2, tab3 = st.tabs(["🔐 Login", "📝 Register", "🔄 Reset Password"])
+
     with tab1:
         st.title("🔐 Login")
         username = st.text_input("Username", key="login_user")
@@ -104,4 +105,108 @@ if not st.session_state.authenticated:
         st.title("📝 Register")
         new_user = st.text_input("Choose Username", key="reg_user")
         new_pass = st.text_input("Choose Password", type="password", key="reg_pass")
-        role = st.selectbox("Role", ["admin]()
+        role = st.selectbox("Role", ["admin", "doctor", "receptionist"])
+        if st.button("Register"):
+            register(new_user, new_pass, role)
+
+    with tab3:
+        st.title("🔄 Reset Password")
+        user_reset = st.text_input("Enter your Username", key="reset_user")
+        new_pass = st.text_input("New Password", type="password", key="reset_pass")
+        if st.button("Reset Password"):
+            cursor = conn.execute("SELECT * FROM users WHERE username = ?", (user_reset,))
+            if cursor.fetchone():
+                reset_password(user_reset, new_pass, conn)
+                st.success("Password reset successfully!")
+            else:
+                st.error("Username does not exist.")
+
+# --- Main Dashboard ---
+else:
+    st.sidebar.success(f"Logged in as {st.session_state.username} ({st.session_state.role})")
+    if st.sidebar.button("Logout"):
+        st.session_state.authenticated = False
+        st.session_state.username = None
+        st.session_state.role = None
+        st.rerun()
+
+    st.title("🏥 CareConnect Hospital Dashboard")
+    tab1, tab2, tab3 = st.tabs(["🧑‍⚕️ Patients", "👨‍⚕️ Doctors", "📅 Appointments"])
+
+    # --- Patients Tab ---
+    with tab1:
+        st.header("🧑‍⚕️ Patient Records")
+        if st.button("Show All Patients"):
+            df = pd.read_sql_query("SELECT * FROM patients", conn)
+            st.dataframe(df)
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv, "patients.csv", "text/csv")
+
+        if st.session_state.role in ["admin", "receptionist"]:
+            with st.form("add_patient_form"):
+                st.subheader("Add New Patient")
+                name = st.text_input("Name")
+                age = st.number_input("Age", min_value=0, max_value=120)
+                gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+                contact = st.text_input("Contact")
+                submitted = st.form_submit_button("Add Patient")
+                if submitted and name and contact:
+                    conn.execute("INSERT INTO patients (name, age, gender, contact) VALUES (?, ?, ?, ?)",
+                                 (name, age, gender, contact))
+                    conn.commit()
+                    st.success("Patient added successfully!")
+
+    # --- Doctors Tab ---
+    with tab2:
+        st.header("👨‍⚕️ Doctor Records")
+        if st.button("Show All Doctors"):
+            df = pd.read_sql_query("SELECT * FROM doctors", conn)
+            st.dataframe(df)
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv, "doctors.csv", "text/csv")
+
+        if st.session_state.role == "admin":
+            with st.form("add_doctor_form"):
+                st.subheader("Add New Doctor")
+                name = st.text_input("Doctor Name")
+                specialty = st.text_input("Specialty")
+                submitted = st.form_submit_button("Add Doctor")
+                if submitted and name and specialty:
+                    conn.execute("INSERT INTO doctors (name, specialty) VALUES (?, ?)", (name, specialty))
+                    conn.commit()
+                    st.success("Doctor added successfully!")
+
+    # --- Appointments Tab ---
+    with tab3:
+        st.header("📅 Appointments")
+        if st.button("Show All Appointments"):
+            query = '''
+            SELECT a.appointment_id, p.name AS patient, d.name AS doctor, 
+                   a.appointment_date, a.status, a.diagnosis
+            FROM appointments a
+            JOIN patients p ON a.patient_id = p.patient_id
+            JOIN doctors d ON a.doctor_id = d.doctor_id
+            '''
+            df = pd.read_sql_query(query, conn)
+            st.dataframe(df)
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download CSV", csv, "appointments.csv", "text/csv")
+
+        if st.session_state.role in ["admin", "receptionist"]:
+            with st.form("add_appointment_form"):
+                st.subheader("Book Appointment")
+                patients = conn.execute("SELECT patient_id, name FROM patients").fetchall()
+                doctors = conn.execute("SELECT doctor_id, name FROM doctors").fetchall()
+                patient_choice = st.selectbox("Select Patient", patients, format_func=lambda x: x[1])
+                doctor_choice = st.selectbox("Select Doctor", doctors, format_func=lambda x: x[1])
+                appointment_date = st.date_input("Appointment Date", value=date.today())
+                status = st.selectbox("Status", ["Scheduled", "Completed", "Cancelled"])
+                diagnosis = st.text_input("Diagnosis")
+                submitted = st.form_submit_button("Book Appointment")
+                if submitted:
+                    conn.execute("""
+                        INSERT INTO appointments (patient_id, doctor_id, appointment_date, status, diagnosis)
+                        VALUES (?, ?, ?, ?, ?)""",
+                        (patient_choice[0], doctor_choice[0], appointment_date, status, diagnosis))
+                    conn.commit()
+                    st.success("Appointment booked successfully!")
