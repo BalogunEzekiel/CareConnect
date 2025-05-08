@@ -4,26 +4,19 @@ import pandas as pd
 import hashlib
 import uuid
 import time
+import bcrypt
 
 # --- Helper Functions ---
+
 def hash_password(password):
-    """Hash a password using SHA256."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash a password using bcrypt."""
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password.encode(), salt)
+    return hashed_password
 
 def check_password(input_password, stored_hashed_password):
     """Check if the input password matches the stored hashed password."""
-    return hash_password(input_password) == stored_hashed_password
-
-def create_reset_token():
-    """Generate a unique token for password reset."""
-    return str(uuid.uuid4())
-
-def reset_password(username, new_password, conn):
-    """Reset password for a user."""
-    hashed_password = hash_password(new_password)
-    query = "UPDATE users SET password = ? WHERE username = ?"
-    conn.execute(query, (hashed_password, username))
-    conn.commit()
+    return bcrypt.checkpw(input_password.encode(), stored_hashed_password)
 
 # --- Configuration ---
 st.set_page_config(page_title="CareConnect - Hospital Dashboard", layout="wide")
