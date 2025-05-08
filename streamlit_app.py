@@ -10,7 +10,10 @@ def hash_password(password):
     return bcrypt.hashpw(password.encode(), salt).decode('utf-8')
 
 def check_password(input_password, stored_hashed_password):
-    return bcrypt.checkpw(input_password.encode(), stored_hashed_password.encode('utf-8'))
+    # Ensure stored_hashed_password is bytes
+    if isinstance(stored_hashed_password, str):
+        stored_hashed_password = stored_hashed_password.encode('utf-8')
+    return bcrypt.checkpw(input_password.encode(), stored_hashed_password)
 
 def reset_password(username, new_password, conn):
     hashed = hash_password(new_password)
@@ -204,7 +207,7 @@ else:
                 diagnosis = st.text_input("Diagnosis")
                 submitted = st.form_submit_button("Book Appointment")
                 if submitted:
-                    conn.execute("""
+                    conn.execute(""" 
                         INSERT INTO appointments (patient_id, doctor_id, appointment_date, status, diagnosis)
                         VALUES (?, ?, ?, ?, ?)""",
                         (patient_choice[0], doctor_choice[0], appointment_date, status, diagnosis))
